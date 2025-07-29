@@ -18,8 +18,10 @@
             <div class="movie-header-right">
                 <h1 class="movie-title">{{ movie.title }}</h1>
                 <p class="movie-meta">
-                    <span class="rating">⭐ {{ movie.vote_average }}</span> | 
-                    <span class="release-date">{{ movie.release_date }}</span>
+                    <span class="rating">⭐ {{ movie.vote_average }}</span>  
+                    {% if movie.release_date %}
+                    <span class="release-date">| {{ movie.release_date }}</span>
+                    {% endif %}
                 </p>
                 <p class="movie-overview">{{ movie.overview }}</p>
                 <script>

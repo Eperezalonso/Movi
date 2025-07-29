@@ -61,11 +61,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const cards     = document.querySelectorAll("#media-list .individual-cards");
 
   function setFilter(type) {
-    // toggle active class on buttons
     moviesBtn.classList.toggle("active", type === "movie");
     tvBtn   .classList.toggle("active", type === "tv");
 
-    // show/hide cards
     cards.forEach(card => {
       const mediaType = card.getAttribute("data-media-type");
       if (type === "all" || mediaType === type) {
@@ -79,10 +77,8 @@ document.addEventListener("DOMContentLoaded", () => {
   moviesBtn.addEventListener("click", () => setFilter("movie"));
   tvBtn    .addEventListener("click", () => setFilter("tv"));
 
-  // default on page load: show movies only
   setFilter("movie");
 
-  // existing "Load More" logic...
   const loadMoreBtn = document.getElementById("load-more");
   if (loadMoreBtn) {
     loadMoreBtn.addEventListener("click", async () => {
@@ -103,7 +99,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
         document.getElementById("media-list").appendChild(card);
       });
-      // re‐apply current filter so newly loaded items obey the toggle
+
       const activeType = moviesBtn.classList.contains("active") ? "movie" : "tv";
       setFilter(activeType);
 

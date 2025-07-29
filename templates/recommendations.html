@@ -10,7 +10,7 @@
 <div class="update-notification">
     <div style="text-align: center;">
         <small style="color: #cccccc; font-style: italic;">
-            <i class="fas fa-sync-alt"></i> Recommendations update automatically when you rate movies
+            <i class="fas fa-sync-alt"></i>
         </small>
         {% if last_update %}
         <small class="last-update">
@@ -18,10 +18,10 @@
         </small>
         {% endif %}
         <br>
-        <button onclick="window.location.href='{{ url_for('refresh_recommendations') }}';" class="btn btn-outline-primary btn-sm" style="margin-top: 0.5rem;">
+        <button onclick="window.location.href='{{ url_for('refresh_recommendations') }}';" class="btn-outline-primarybtn-sm" style="margin-top: 0.5rem;">
             <i class="fas fa-refresh"></i> Refresh Recommendations
         </button>
-        <button onclick="window.location.href='{{ url_for('add_popular_movies') }}';" class="btn btn-outline-success btn-sm" style="margin-top: 0.5rem; margin-left: 0.5rem;">
+        <button onclick="window.location.href='{{ url_for('add_popular_movies') }}';" class="btn-outline-successbtn-sm" style="margin-top: 0.5rem; margin-left: 0.5rem;">
             <i class="fas fa-plus"></i> Add Popular Movies
         </button>
     </div>
