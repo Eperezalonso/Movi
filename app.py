@@ -248,6 +248,11 @@ def movie_videos_json(movie_id):
       ]
     }
 
+@app.route("/tv/<int:movie_id>")
+def tv_detail(movie_id):
+    # just call your existing movie_detail handler
+    return movie_detail(movie_id)
+
 @app.route("/chat", methods=["GET"])
 def chat_page():
     return render_template("chat.html")

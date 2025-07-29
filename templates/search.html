@@ -6,65 +6,113 @@
 {% block body %}
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
-<form method="GET" action="/" class = "search-form">
-  <input type="text" name="query" placeholder="Search for a movie..." value="{{ query or '' }}" class = "search-bar">
-  <button type="submit" class="search-button">Search</button>
-  
+
+<form method="GET" action="/" class="search-form">
+  <div class="search-input-container">
+    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path d="M21 21L16.514 16.506L21 21ZM19 10.5C19 15.194 15.194 19 10.5 19C5.806 19 2 15.194 2 10.5C2 5.806 5.806 2 10.5 2C15.194 2 19 5.806 19 10.5Z" stroke="currentColor" stroke-width="2"/>
+    </svg>
+    <input type="text" name="query" placeholder="Search for a movie or show…" value="{{ query or '' }}" class="search-bar">
+  </div>
   {% if query %}
-    <button  class="clear-button" type="button" onclick="window.location.href='{{ url_for('search') }}'">Clear</button>
+    <button type="button" class="clear-button" onclick="window.location.href='{{ url_for('search') }}'">Clear</button>
   {% endif %}
 </form>
-<h2>{% if query %}Search Results for "{{ query }}"{% else %}Popular Movies{% endif %}</h2>
-<div id="movie-list" class="movie-list">
-  {% for movie in movies %}
-  <div class="individual-cards" onclick="window.location.href='{{ url_for('movie_detail', movie_id=movie.id) }}'">
-    <img src="https://image.tmdb.org/t/p/w500{{ movie.poster_path }}" alt="Movie poster" class="image">
-    <p style="margin-bottom: -10px;">{{ movie.title }}</p>
-    <p class="rating">&#11088; {{ movie.vote_average }}</p>
+
+{% if query %}
+  <div class="search-results-header">
+    <h2>Search Results for "{{ query }}"</h2>
   </div>
+{% endif %}
+
+{% if is_discover %}
+<div class="filter-bar">
+  <button id="filter-movies" class="filter-btn active">Movies</button>
+  <button id="filter-tv"    class="filter-btn">TV Shows</button>
+</div>
+{% endif %}
+
+<div id="media-list" class="movie-list">
+  {% for item in movies %}
+    <div class="individual-cards"
+         data-media-type="{{ item.media_type }}"
+         onclick="window.location.href='{{ url_for('movie_detail', movie_id=item.id) }}'">
+      <img src="https://image.tmdb.org/t/p/w500{{ item.poster_path }}" 
+           alt="{{ item.title }} poster" 
+           class="image">
+      <p class="title">{{ item.title }}</p>
+    </div>
   {% endfor %}
 </div>
 
-
 {% if is_discover %}
-    <div class="view-more-container">
-      <button id="load-more" class="view-more-btn" data-page="{{ next_page }}">Load More</button>
-    </div>
+  <div class="view-more-container">
+    <button id="load-more" class="view-more-btn" data-page="{{ next_page }}">
+      Load More
+    </button>
+  </div>
 {% endif %}
 
+{% if is_discover %}
 <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    const loadMoreBtn = document.getElementById("load-more");
-    const movieList = document.getElementById("movie-list");
-  
-    if (loadMoreBtn && movieList) {
-      loadMoreBtn.addEventListener("click", async () => {
-        const page = loadMoreBtn.dataset.page;
-        loadMoreBtn.disabled = true;
-        loadMoreBtn.innerText = "Loading...";
-  
-        const res = await fetch(`/?page=${page}&ajax=true`);
-        const movies = await res.json();
-  
-        movies.forEach(movie => {
-          const card = document.createElement("div");
-          card.className = "individual-cards";
-          card.onclick = () => window.location.href = `/movie/${movie.id}`;
-          card.innerHTML = `
-            <img src="https://image.tmdb.org/t/p/w500${movie.poster_path}" alt="Movie poster" class="image">
-            <p style="margin-bottom: -10px;">${movie.title}</p>
-            <p class="rating">&#11088; ${movie.vote_average}</p>
-          `;
-          movieList.appendChild(card);
-        });
-  
-        // Update page count
-        loadMoreBtn.dataset.page = parseInt(page) + 1;
-        loadMoreBtn.disabled = false;
-        loadMoreBtn.innerText = "Load More";
-      });
-    }
-  });
-  </script>  
+document.addEventListener("DOMContentLoaded", () => {
+  const moviesBtn = document.getElementById("filter-movies");
+  const tvBtn     = document.getElementById("filter-tv");
+  const cards     = document.querySelectorAll("#media-list .individual-cards");
 
+  function setFilter(type) {
+    // toggle active class on buttons
+    moviesBtn.classList.toggle("active", type === "movie");
+    tvBtn   .classList.toggle("active", type === "tv");
+
+    // show/hide cards
+    cards.forEach(card => {
+      const mediaType = card.getAttribute("data-media-type");
+      if (type === "all" || mediaType === type) {
+        card.style.display = "";
+      } else {
+        card.style.display = "none";
+      }
+    });
+  }
+
+  moviesBtn.addEventListener("click", () => setFilter("movie"));
+  tvBtn    .addEventListener("click", () => setFilter("tv"));
+
+  // default on page load: show movies only
+  setFilter("movie");
+
+  // existing "Load More" logic...
+  const loadMoreBtn = document.getElementById("load-more");
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener("click", async () => {
+      const page = loadMoreBtn.dataset.page;
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.innerText = "Loading...";
+      const res = await fetch(`/?page=${page}&ajax=true`);
+      const newItems = await res.json();
+      newItems.forEach(item => {
+        const card = document.createElement("div");
+        card.className = "individual-cards";
+        card.setAttribute("data-media-type", item.media_type);
+        card.onclick = () => window.location.href = `/${item.media_type}/${item.id}`;
+        card.innerHTML = `
+          <img src="https://image.tmdb.org/t/p/w500${item.poster_path}" class="image" />
+          <p class="title">${item.title}</p>
+          <p class="rating">⭐ ${item.vote_average}</p>
+        `;
+        document.getElementById("media-list").appendChild(card);
+      });
+      // re‐apply current filter so newly loaded items obey the toggle
+      const activeType = moviesBtn.classList.contains("active") ? "movie" : "tv";
+      setFilter(activeType);
+
+      loadMoreBtn.dataset.page = parseInt(page) + 1;
+      loadMoreBtn.disabled = false;
+      loadMoreBtn.innerText = "Load More";
+    });
+  }
+});
+</script>
+{% endif %}
 {% endblock %}
