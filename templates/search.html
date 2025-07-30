@@ -36,7 +36,7 @@
   {% for item in movies %}
     <div class="individual-cards"
          data-media-type="{{ item.media_type }}"
-         onclick="window.location.href='{{ url_for('movie_detail', movie_id=item.id) }}'">
+         data-id="{{ item.id }}">
       <img src="https://image.tmdb.org/t/p/w500{{ item.poster_path }}" 
            alt="{{ item.title }} poster" 
            class="image">
@@ -53,62 +53,74 @@
   </div>
 {% endif %}
 
-{% if is_discover %}
 <script>
 document.addEventListener("DOMContentLoaded", () => {
+  const mediaList = document.getElementById("media-list");
   const moviesBtn = document.getElementById("filter-movies");
   const tvBtn     = document.getElementById("filter-tv");
-  const cards     = document.querySelectorAll("#media-list .individual-cards");
+  let cards;
 
-  function setFilter(type) {
-    moviesBtn.classList.toggle("active", type === "movie");
-    tvBtn   .classList.toggle("active", type === "tv");
 
-    cards.forEach(card => {
-      const mediaType = card.getAttribute("data-media-type");
-      if (type === "all" || mediaType === type) {
-        card.style.display = "";
-      } else {
-        card.style.display = "none";
-      }
+  mediaList.addEventListener("click", e => {
+      const card = e.target.closest(".individual-cards");
+      if (!card) return;
+      const type = card.dataset.mediaType;
+      const id   = card.dataset.id;
+      window.location.href = `/${type}/${id}`;
     });
-  }
 
-  moviesBtn.addEventListener("click", () => setFilter("movie"));
-  tvBtn    .addEventListener("click", () => setFilter("tv"));
 
-  setFilter("movie");
+  {% if is_discover %}
+    function setFilter(type) {
+      moviesBtn.classList.toggle("active", type === "movie");
+      tvBtn   .classList.toggle("active", type === "tv");
 
-  const loadMoreBtn = document.getElementById("load-more");
-  if (loadMoreBtn) {
-    loadMoreBtn.addEventListener("click", async () => {
-      const page = loadMoreBtn.dataset.page;
-      loadMoreBtn.disabled = true;
-      loadMoreBtn.innerText = "Loading...";
-      const res = await fetch(`/?page=${page}&ajax=true`);
-      const newItems = await res.json();
-      newItems.forEach(item => {
-        const card = document.createElement("div");
-        card.className = "individual-cards";
-        card.setAttribute("data-media-type", item.media_type);
-        card.onclick = () => window.location.href = `/${item.media_type}/${item.id}`;
-        card.innerHTML = `
-          <img src="https://image.tmdb.org/t/p/w500${item.poster_path}" class="image" />
-          <p class="title">${item.title}</p>
-          <p class="rating">⭐ ${item.vote_average}</p>
-        `;
-        document.getElementById("media-list").appendChild(card);
+      cards = mediaList.querySelectorAll(".individual-cards");
+      cards.forEach(card => {
+        card.style.display = (type === "all" || card.dataset.mediaType === type)
+                            ? "" 
+                            : "none";
       });
+    }
 
-      const activeType = moviesBtn.classList.contains("active") ? "movie" : "tv";
-      setFilter(activeType);
+    if (moviesBtn && tvBtn) {
+      moviesBtn.addEventListener("click", () => setFilter("movie"));
+      tvBtn    .addEventListener("click", () => setFilter("tv"));
+      setFilter("movie");
+    }
 
-      loadMoreBtn.dataset.page = parseInt(page) + 1;
-      loadMoreBtn.disabled = false;
-      loadMoreBtn.innerText = "Load More";
-    });
-  }
+    const loadMoreBtn = document.getElementById("load-more");
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener("click", async () => {
+        const page = loadMoreBtn.dataset.page;
+        loadMoreBtn.disabled = true;
+        loadMoreBtn.innerText = "Loading…";
+
+        const res = await fetch(`/?page=${page}&ajax=true`);
+        const newItems = await res.json();
+
+        newItems.forEach(item => {
+          const card = document.createElement("div");
+          card.className = "individual-cards";
+          card.dataset.mediaType = item.media_type;
+          card.dataset.id        = item.id;
+          card.innerHTML = `
+            <img src="https://image.tmdb.org/t/p/w500${item.poster_path}" class="image" />
+            <p class="title">${item.title}</p>
+            <p class="rating">⭐ ${item.vote_average}</p>
+          `;
+          mediaList.appendChild(card);
+        });
+
+        const activeType = moviesBtn.classList.contains("active") ? "movie" : "tv";
+        setFilter(activeType);
+
+        loadMoreBtn.dataset.page = parseInt(page) + 1;
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.innerText = "Load More";
+      });
+    }
+  {% endif %}
 });
 </script>
-{% endif %}
 {% endblock %}

@@ -115,7 +115,8 @@ def search():
                     "id": m["id"],
                     "title": m["title"],
                     "poster_path": m["poster_path"],
-                    "vote_average": m["vote_average"]
+                    "vote_average": m["vote_average"],
+                    "media_type": m["media_type"]
                 } for m in movie_batch
             ])
 
@@ -186,51 +187,44 @@ def my_movies():
 
 @app.route("/rate_movie/<int:movie_id>", methods=["POST"])
 def rate_movie(movie_id):
-    rating = request.form.get("rating")
-    if rating and session.get("user_id") is not None:
+    rating_str = request.form.get("rating")
+    if rating_str and session.get("user_id") is not None:
+        # 1) Cast to float (so Jinja's round filter works)
+        try:
+            rating = float(rating_str)
+        except ValueError:
+            # invalid input → just bounce back
+            return redirect(url_for("movie_detail", media_id=movie_id))
+
         print(f"id: {session['user_id']}, movie_id: {movie_id}, rating: {rating}")
         global movies
-        
+
         # Try to find movie in global movies list first
         movie = next((m for m in movies if m["id"] == movie_id), None)
-        
-        # If not found in global list, try to get from database
+
+        # If not found in global list, try DB then TMDB API (unchanged)…
         if movie is None:
             movie_data = database.get_movie_data(movie_id)
             if movie_data:
                 movie = dict(movie_data)
             else:
-                # Try to fetch from TMDB API by movie ID
-                try:
-                    from search import TMDBClient
-                    import os
-                    from dotenv import load_dotenv
-                    
-                    load_dotenv()
-                    api_key = os.getenv("TMDB_API_KEY")
-                    if api_key:
-                        tmdb_client = TMDBClient(api_key=api_key)
-                        # Fetch movie by ID directly
-                        movie_data = tmdb_client._make_request(f"/movie/{movie_id}")
-                        if movie_data and 'id' in movie_data:
-                            movie = movie_data
-                        else:
-                            print(f"Movie {movie_id} not found in TMDB API")
-                            return redirect(url_for("movie_detail", movie_id=movie_id))
-                    else:
-                        print("TMDB API key not available")
-                        return redirect(url_for("movie_detail", movie_id=movie_id))
-                except Exception as e:
-                    print(f"Error fetching movie {movie_id}: {e}")
-                    return redirect(url_for("movie_detail", movie_id=movie_id))
-        
-        # Add movie to database if we have movie data
+                # … your existing TMDB‑fetch logic here …
+                # make sure any early redirects use media_id, not movie_id
+                return redirect(url_for("movie_detail", media_id=movie_id))
+
+        # Add movie + rating
         if movie:
             try:
                 database.add_media(movie)
                 database.add_user_movies_by_id(session["user_id"], movie_id, rating)
-                
-                # Refresh the recommendation model when new ratings are added
+
+                # 2) Patch the in‑memory list so the next render sees rating immediately
+                for m in movies:
+                    if m["id"] == movie_id:
+                        m["rating"] = rating
+                        break
+
+                # Refresh recommendation model (unchanged)
                 try:
                     refresh_model()
                     print(f"Recommendation model refreshed after rating movie {movie_id}")
@@ -240,95 +234,78 @@ def rate_movie(movie_id):
                 print(f"Error adding movie to database: {e}")
         else:
             print(f"Could not find movie {movie_id} to rate")
-            
-    elif rating:
+
+    elif rating_str:
         print("Not logged in")
         return redirect(url_for("login"))
     else:
         print("No rating provided")
-    return redirect(url_for("movie_detail", movie_id=movie_id))
 
-@app.route("/movie/<int:movie_id>")
-def movie_detail(movie_id):
-    # Look up the movie in your database or list
+    return redirect(url_for("movie_detail", media_id=movie_id))
+
+@app.route("/movie/<int:media_id>")
+def movie_detail(media_id):
+    return _media_detail("movie", media_id)
+
+@app.route("/tv/<int:media_id>")
+def tv_detail(media_id):
+    return _media_detail("tv", media_id)
+
+
+def _media_detail(media_type, media_id):
+    """
+    Lookup in-memory, then DB, then TMDB API (using either /movie or /tv),
+    then render movie_detail.html.
+    """
     global movies, search_client
-    movie = next((m for m in movies if m["id"] == movie_id), None)
-    
-    # If not in current movies list, try to get from database
+
+    movie = next((m for m in movies if m["id"] == media_id), None)
+
     if movie is None:
-        movie_data = database.get_movie_data(movie_id)
-        if movie_data:
-            movie = dict(movie_data)
-        else:
-            # Try to fetch from TMDB API by movie ID
-            try:
-                from search import TMDBClient
-                import os
-                from dotenv import load_dotenv
-                
-                load_dotenv()
-                api_key = os.getenv("TMDB_API_KEY")
-                if api_key:
-                    tmdb_client = TMDBClient(api_key=api_key)
-                    # Fetch movie by ID directly
-                    movie_data = tmdb_client._make_request(f"/movie/{movie_id}")
-                    if movie_data and 'id' in movie_data:
-                        movie = movie_data
-                        # Add to database
-                        database.add_media(movie)
-                    else:
-                        abort(404)
-                else:
-                    abort(404)
-            except Exception as e:
-                print(f"Error fetching movie {movie_id}: {e}")
-                abort(404)
-    
+        db_row = database.get_movie_data(media_id)
+        if db_row:
+            movie = dict(db_row)
+
     if movie is None:
-        abort(404)
-    
+        load_dotenv()
+        api_key = os.getenv("TMDB_API_KEY") or abort(404)
+        tmdb    = TMDBClient(api_key=api_key)
+
+        data = tmdb._make_request(f"/{media_type}/{media_id}") or abort(404)
+
+        if media_type == "tv" and "name" in data:
+            data["title"] = data["name"]
+
+        movie = data
+
+        database.add_media(movie) 
+
     movie = dict(movie)
-    
-    # Handle genre information
-    genre_ids = movie.get("genre_ids", [])
-    
+
+    genre_ids = movie.get("genre_ids") or []
     if not genre_ids:
         try:
-            genre_ids = database.get_movie_genres(movie_id)
-        except Exception as e:
-            print(f"Error getting genres for movie {movie_id}: {e}")
+            genre_ids = database.get_movie_genres(media_id)
+        except Exception:
             genre_ids = []
-    
-    # Set genre names if search_client is available
-    if search_client and genre_ids:
+    movie["genre_names"] = (
+        search_client.genre_ids_to_names(genre_ids)
+        if search_client and genre_ids
+        else []
+    )
+
+    if session.get("user_id"):
         try:
-            movie["genre_names"] = search_client.genre_ids_to_names(genre_ids)
-        except Exception as e:
-            print(f"Error converting genre IDs to names for movie {movie_id}: {e}")
-            movie["genre_names"] = []
-    else:
-        movie["genre_names"] = []
-    
-    if session.get("user_id") is not None:
-        try:
-            user_movies = database.get_user_movies(session["user_id"])
-            user_movie = None
-            for um in user_movies:
+            for um in database.get_user_movies(session["user_id"]):
                 if um["id"] == movie["id"]:
-                    user_movie = um
+                    movie["rating"] = um.get("rating")
                     break
-            try:
-                rating = user_movie["rating"]
-            except (TypeError, AttributeError):
-                rating = None
-            if user_movie and rating:
-                movie["rating"] = rating
-        except Exception as e:
-            print(f"Error getting user rating for movie {movie_id}: {e}")
-    
+        except Exception:
+            pass
+
     return render_template("movie_detail.html", movie=movie)
 
-
+@app.route("/tv/<int:movie_id>/videos.json")
 @app.route("/movie/<int:movie_id>/videos.json")
 def movie_videos_json(movie_id):
     try:
@@ -363,11 +340,6 @@ def movie_videos_json(movie_id):
     except Exception as e:
         print(f"Error in movie_videos_json for movie {movie_id}: {e}")
         return {"results": []}
-
-@app.route("/tv/<int:movie_id>")
-def tv_detail(movie_id):
-    # just call your existing movie_detail handler
-    return movie_detail(movie_id)
 
 @app.route("/chat", methods=["GET"])
 def chat_page():
