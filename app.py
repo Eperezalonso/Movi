@@ -102,12 +102,24 @@ def get_chat_history(user_id):
 def search():
     global movies
     query = request.args.get('query')
+    page = request.args.get('page', 1, type=int)
     if query:
         movies = search_client.search_media(title=query)
         return render_template("search.html", movies=movies, query=query,is_discover=False)
     else:
-        page = request.args.get('page', 1, type=int)
-        movies = search_client.discover_mixed_media(page=page)
+        movie_batch = search_client.discover_mixed_media(page=page)
+        
+        if request.args.get("ajax") == "true":
+            return jsonify([
+                {
+                    "id": m["id"],
+                    "title": m["title"],
+                    "poster_path": m["poster_path"],
+                    "vote_average": m["vote_average"]
+                } for m in movie_batch
+            ])
+
+        movies = movie_batch
         next_page = page + 1
         return render_template("search.html", movies=movies, query=None, is_discover=True, next_page=next_page)
 
@@ -141,7 +153,7 @@ def register():
         password = request.form["password"]
         if not username or not password:
             return render_template("register.html", error="Username and password are required.")
-        hashed_password = generate_password_hash(password)
+        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
         success = database.add_user(username, hashed_password)
         if not success:
             return render_template("register.html", error="Username already exists.")
@@ -351,6 +363,11 @@ def movie_videos_json(movie_id):
     except Exception as e:
         print(f"Error in movie_videos_json for movie {movie_id}: {e}")
         return {"results": []}
+
+@app.route("/tv/<int:movie_id>")
+def tv_detail(movie_id):
+    # just call your existing movie_detail handler
+    return movie_detail(movie_id)
 
 @app.route("/chat", methods=["GET"])
 def chat_page():
