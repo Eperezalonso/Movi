@@ -44,7 +44,7 @@
 {% if recommendations %}
 <div class="movie-list">
     {% for movie in recommendations %}
-    <div class="individual-cards" onclick="window.location.href='{{ url_for('movie_detail', movie_id=movie.id) }}';">
+    <div class="individual-cards" onclick="window.location.href='{{ url_for('movie_detail', media_id=movie.id) }}';">
         {% if movie.poster_path %}
             <img src="https://image.tmdb.org/t/p/w500{{ movie.poster_path }}" alt="Movie poster" class="image">
         {% else %}
@@ -67,9 +67,6 @@
         Rate some movies first to get personalized recommendations!
         {% endif %}
     </p>
-    <a href="{{ url_for('search') }}" class="btn btn-primary">
-        <i class="fas fa-search"></i> Start Exploring Movies
-    </a>
 </div>
 {% endif %}
 {% endblock %} 
