@@ -351,7 +351,7 @@ def chat():
     user_message = data.get("message", "")
     context = []
     if session.get("user_id"):
-        history = get_chat_history(session["user_id"])
+        # history = get_chat_history(session["user_id"])
         user_data = database.get_user_movies(session["user_id"])
         for user_movie in user_data:
             media = dict(user_movie)
@@ -373,8 +373,7 @@ def chat():
     
     history.append({'role': 'user', 'message': user_message})
     # last 10 mssgs
-    if len(history)>10:
-        history = history[-10]
+    history = history[-10:]
     response = get_chatbot_response(user_message, context, history)
     cleaned = clean_response(response)
 
